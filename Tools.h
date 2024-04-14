@@ -13,6 +13,10 @@ struct pingnode {
     struct pingnode* next;
 };
 typedef struct pingnode PingNode;
+struct sqlnode {
+    char dbresult[800];
+};
+typedef struct sqlnode SQLNode;
 enum type {
     sql,
     ping
@@ -20,13 +24,11 @@ enum type {
 struct config {
     char alreadySet;
     type service;
-    int flushafter;//offline after x attempts
-    int refreshrate;//ttl
+    int flushafter;//PING offline after x attempts
+    int refreshrate;//PING ttl, SQL looping delay
     int port;
-    const char* server;
-    const char* uname;
-    const char* pass;
-    char* query;//no free memory
+    char* connectionstring;//no free, SQL
+    char* query;//no free memory, SQL
     void* head;
 };
 

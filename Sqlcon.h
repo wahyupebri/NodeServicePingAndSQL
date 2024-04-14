@@ -1,4 +1,5 @@
+#pragma once
 #ifndef SQLCON_H
 #define SQLCON_H
-int getDataFromSQL(char* server, char* db, char* uname, char* pass);
+char * getDataFromSQL(const char* constring, char* query, char * result);
 #endif

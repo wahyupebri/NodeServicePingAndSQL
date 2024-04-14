@@ -13,6 +13,7 @@ extern int gloId;
 extern struct config gloConfig;
 int main(int argc, char* argv[])
 {
+#ifdef RELEASE_PING
     if (argc < 2)
         gloConfig.port = 8080;
     else
@@ -38,33 +39,35 @@ int main(int argc, char* argv[])
         //return 1;
     }
     
-    //if (argc > 1) {
-    //    //port=argv[1]
-    //    if (strcmp(argv[2], "ping") == NULL) {
-    //gloConfig.service = type::ping;
-    //    }
-    //    else if (strcmp(argv[2], "sql") == NULL) {
-    // gloConfig.service = type::sql;
-    //        //db server argv[3]
-    //        //uname argv[4]
-    //        //password argv[5]
-    //    }
-    //    else {
-    //        printf("ERROR: Unknown argument\n");
-    //        return 1;
-    //    }
-    //}
-    //else {
-    //    printf("ERROR: Need argument\n");
-    //    return 1;
-    //}
+ 
     gloId = 1;
     printf("INFO: NodeService ver. 1.0. Dibuat oleh Wahyu Pebrian.\n");
     prepareDB();
-    //insertToPing(NULL, NULL);
-    
-    // Your main service logic goes here
     runWebAndServices();
     sqlite3_close(db);
+#endif
+    //if (argc > 1) {
+ //    //port=argv[1]
+ //    if (strcmp(argv[2], "ping") == NULL) {
+ //gloConfig.service = type::ping;
+ //    }
+ //    else if (strcmp(argv[2], "sql") == NULL) {
+ // gloConfig.service = type::sql;
+ //        //db server argv[3]
+ //        //uname argv[4]
+ //        //password argv[5]
+ //    }
+ //    else {
+ //        printf("ERROR: Unknown argument\n");
+ //        return 1;
+ //    }
+ //}
+ //else {
+ //    printf("ERROR: Need argument\n");
+ //    return 1;
+ //}
+    gloConfig.port = 8080;
+    //gloConfig.service = type::sql;
+    runWebAndServices();
     return 0;
 }

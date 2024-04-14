@@ -14,8 +14,11 @@
 sqlite3* db; // Declare db as a global variable
 //extern struct config gloConfig;
 struct config gloConfig;
+SQLNode gloSQLNode;
 int gloId;
+HANDLE hMutex;
 DWORD WINAPI ThreadFunction(LPVOID lpParam);
+DWORD WINAPI SQLThreadFunction(LPVOID lpParam);
 PingNode* createPing(char* ip, int result) {
     printf("INFO: Insert to struct-%d %s\n", gloId,ip);
     PingNode* newNode = (PingNode*)malloc(sizeof(PingNode));
@@ -37,7 +40,20 @@ PingNode* createPing(char* ip, int result) {
     gloId++;
     return newNode;
 }
-
+void createSQL() {
+    hMutex = CreateMutex(NULL, FALSE, NULL);
+    if (hMutex == NULL) {
+        fprintf(stderr, "Failed to create mutex. Error code: %lu\n", GetLastError());
+        return;
+    }
+    LPVOID parameter = (LPVOID)&gloConfig;
+    HANDLE thread = CreateThread(NULL, 0, SQLThreadFunction, parameter, 0, NULL);
+        if (thread == NULL) {
+            fprintf(stderr, "ERROR: Error creating thread (%lu)\n", GetLastError());
+            return;
+        }
+    return;
+}
 // Function to insert a new node at the beginning of the linked list
 PingNode* insertAtPingBeginning(PingNode* head, int result, char* ip) {
     PingNode* newNode = createPing(ip, result);
@@ -172,6 +188,21 @@ void parsingConfigPing(const char* url) {
         pcounter++;
     }
 }
+void swapCommaToSemiColon(char* str) {
+    int i, j = 0;
+    char temp;
+
+    // Iterate through each character in the string
+    for (i = 0; str[i] != '\0'; i++) {
+        // If the current character is not a space, copy it to the front
+        if (str[i] != ',') {
+            str[j] = ';';
+            j++;
+        }
+    }
+    // Terminate the string with a null character
+    str[j] = '\0';
+}
 void parsingConfigSQL(const char* url) {
     //int number = atoi(char_array);
     printf("INFO: url to parsing is SQL %s\n", url);
@@ -196,21 +227,24 @@ void parsingConfigSQL(const char* url) {
 
             if (param == 0) {
                 int number = atoi(temp_first);
-                gloConfig.flushafter = number;
+                gloConfig.refreshrate = number;
                 param++;
                 free(temp_first);
             }
             else if (param == 1) {
-                int number = atoi(temp_first);
-                gloConfig.refreshrate = number;
+                char * pconstring = (char*)malloc((strlen(temp_first) + 1) * sizeof(char));
+                strcpy(pconstring, temp_first);
+                *(pconstring + strlen(pconstring)) = '\0';
+                swapCommaToSemiColon(pconstring);
+                gloConfig.connectionstring = pconstring;
                 param++;
                 free(temp_first);
             }
             else if (param == 2) {
                 //int number = atoi(temp_first);
                 pquery = (char*)malloc((strlen(temp_first)+1) * sizeof(char));
-                strncpy(pquery, temp_first, strlen(temp_first) - 1);
-                *(pquery + strlen(temp_first) - 1) = '\0';
+                strcpy(pquery, temp_first);
+                *(pquery + strlen(pquery)) = '\0';
                 //gloConfig.query = pquery;
                 //gloConfig.refreshrate = number;
                 //printf("INFO: Setting KEY %s %p\n", pquery, &pquery);
@@ -221,13 +255,19 @@ void parsingConfigSQL(const char* url) {
             }
             else {
                 printf("INFO: Setting KEY %s\n", temp_url);
-                int len_url = strlen(temp_url);
-                int len_end = strlen(";end");
-                char* new_url = (char*)malloc(sizeof(char) * (len_url - len_end));
-                strncpy(new_url, temp_url, (len_url - len_end));
-                *(new_url + strlen(new_url)-2) = '\0';
-                printf("INFO: New Setting KEY %s\n", new_url);
+                pkeys = (char*)malloc((strlen(temp_url) - 3) * sizeof(char));
+                strncpy(pkeys,temp_url, (strlen(temp_url) - 3));
+                *(pkeys + (strlen(temp_url) - 4)) = '\0';
                 free(temp_first);
+                char* temp_pkeys = pkeys;
+                while (*temp_pkeys != '\0') {
+                    if (*temp_pkeys == ';') {
+                        *temp_pkeys = ',';
+                    }
+                    temp_pkeys++;
+                    numkey++;
+                }
+                
                 break;
             }
 
@@ -238,14 +278,40 @@ void parsingConfigSQL(const char* url) {
         pcounter++;
     }
     if (numkey > 0) {
-        /**(pquery + strlen(pquery) - 2) = ')';
-        *(pquery + strlen(pquery) - 1) = '\0';*/
-        gloConfig.query = pquery;
-        printf("INFO: query is %s\n", pquery);
+        char* temp_pquery = pquery;
+        int len_counter = 1;
+        char* ppart_f = NULL;
+        while (*temp_pquery != '\0') {
+            if (*temp_pquery == '$') {
+                ppart_f = (char*)malloc(sizeof(char) * len_counter-1);
+                strncpy(ppart_f, pquery, len_counter-1);
+                *(ppart_f + len_counter-1) = '\0';
+                printf("INFO: %s\n", ppart_f);
+                break;
+            }
+            len_counter++;
+            temp_pquery++;
+        }
+        len_counter++;
+        temp_pquery++;
+        int newlen = strlen(ppart_f) + strlen(pkeys) + strlen(pquery) - len_counter+1;
+        char* pnewquery = (char*)malloc(newlen * sizeof(char));
+        strcpy(pnewquery, ppart_f);
+        strcat(pnewquery, pkeys);
+        strcat(pnewquery, temp_pquery);
+        *(pnewquery + newlen) = '\0';
+        free(pquery);
+        //free(ppart_f); //CEK ini!
+        free(pkeys);
+        
+        gloConfig.query = pnewquery;
+        printf("INFO: query is %s\n", pnewquery);
     }
     else {
         printf("ERROR: No primary keys in the URL\n");
     }
+    createSQL();
+
 }
 static void parsingConfig(const char* url) {
     if (gloConfig.alreadySet == 0) {
@@ -315,17 +381,29 @@ static enum MHD_Result ahc_echo(void* cls,
         return (enum MHD_Result)ret;
     }
     if (strstr(url, "getdata") != NULL) {
-        printResult();
-        result = encodeResult();
+        WaitForSingleObject(hMutex, INFINITE);
+        if (gloConfig.service == type::ping) {
+            printResult();
+            result = encodeResult();
+        }
+        else if (gloConfig.service == type::sql) {
+            
+            result = gloSQLNode.dbresult;
+        }
+        if (result == NULL) {
+            result = (char *)"Result is empty!!";
+        }
         printf("%s\n", result);
         response = MHD_create_response_from_buffer(strlen(result),
             (void*)result,
             MHD_RESPMEM_MUST_COPY);
+        ReleaseMutex(hMutex);
         ret = MHD_queue_response(connection,
             MHD_HTTP_OK,
             response);
         MHD_destroy_response(response);
-        free(result);//ADD
+        if (gloConfig.service == type::ping)
+            free(result);//ADD
         return (enum MHD_Result)ret;
     }
     //-----end
@@ -367,7 +445,7 @@ DWORD WINAPI ThreadFunction(LPVOID lpParam) {
         ptr->result = -1;
         returncode = doPing(ptr);
         if (returncode == 0)
-            Sleep(10000);
+            Sleep(gloConfig.refreshrate);
         else
             Sleep(500);
         //counter++;
@@ -375,7 +453,36 @@ DWORD WINAPI ThreadFunction(LPVOID lpParam) {
 
     return 0;
 }
+DWORD WINAPI SQLThreadFunction(LPVOID lpParam) {
+    // Your multithreaded logic goes here
 
+    struct config* ptr = (struct config*)lpParam;
+    //int counter = 0;
+    //while(counter < 4){
+    char* presult = NULL;
+    while (true) {
+        //getDataFromSQL(ptr->connectionstring, ptr->query, gloSQLNode.dbresult);
+        //----
+        
+        presult = getDataFromSQL(ptr->connectionstring, ptr->query, presult);
+        printf("INFO: result query: %p %s\n", presult,presult);
+
+        WaitForSingleObject(hMutex, INFINITE);
+        strcpy(gloSQLNode.dbresult,presult);
+        free(presult);
+        presult = NULL;
+        ReleaseMutex(hMutex);
+        
+        
+        //if (returncode == 0)
+        Sleep(gloConfig.refreshrate);
+        //else
+        //    Sleep(100);
+        //counter++;
+    }
+
+    return 0;
+}
 // Entry point for the main thread (service)
 int runWebAndServices() {
     gloConfig.alreadySet = 0;
