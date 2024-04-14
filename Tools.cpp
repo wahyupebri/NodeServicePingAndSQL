@@ -163,13 +163,13 @@ void parsingConfigPing(const char* url) {
 
             if (param == 0) {
                 int number = atoi(temp_first);
-                gloConfig.flushafter = number;
+                gloConfig.refreshrate = number;
                 param++;
                 free(temp_first);
             }
             else if (param == 1) {
                 int number = atoi(temp_first);
-                gloConfig.refreshrate = number;
+                gloConfig.flushafter = number;
                 param++;
                 free(temp_first);
             }
@@ -195,10 +195,14 @@ void swapCommaToSemiColon(char* str) {
     // Iterate through each character in the string
     for (i = 0; str[i] != '\0'; i++) {
         // If the current character is not a space, copy it to the front
-        if (str[i] != ',') {
+        if (str[i] == ',') {
             str[j] = ';';
-            j++;
         }
+        if (str[i] == '_') {
+            str[j] = '#';
+            
+        }
+        j++;
     }
     // Terminate the string with a null character
     str[j] = '\0';
@@ -224,22 +228,23 @@ void parsingConfigSQL(const char* url) {
             temp += (pcounter - lastIPcounter);
             *temp = '\0';
             printf("INFO: Setting Param %s\n", temp_first);
-
             if (param == 0) {
+            char* pconstring = (char*)malloc((strlen(temp_first) + 1) * sizeof(char));
+            strcpy(pconstring, temp_first);
+            *(pconstring + strlen(pconstring)) = '\0';
+            swapCommaToSemiColon(pconstring);
+            gloConfig.connectionstring = pconstring;
+            printf("INFO: Setting Param constring %s\n", pconstring);
+            param++;
+            free(temp_first);
+            }
+            else if (param == 1) {
                 int number = atoi(temp_first);
                 gloConfig.refreshrate = number;
                 param++;
                 free(temp_first);
             }
-            else if (param == 1) {
-                char * pconstring = (char*)malloc((strlen(temp_first) + 1) * sizeof(char));
-                strcpy(pconstring, temp_first);
-                *(pconstring + strlen(pconstring)) = '\0';
-                swapCommaToSemiColon(pconstring);
-                gloConfig.connectionstring = pconstring;
-                param++;
-                free(temp_first);
-            }
+            
             else if (param == 2) {
                 //int number = atoi(temp_first);
                 pquery = (char*)malloc((strlen(temp_first)+1) * sizeof(char));
@@ -294,6 +299,10 @@ void parsingConfigSQL(const char* url) {
         }
         len_counter++;
         temp_pquery++;
+        if (ppart_f == NULL) {
+            printf("ERROR: Syntax error in SQL query. Service stops.\n");
+            return;
+        }
         int newlen = strlen(ppart_f) + strlen(pkeys) + strlen(pquery) - len_counter+1;
         char* pnewquery = (char*)malloc(newlen * sizeof(char));
         strcpy(pnewquery, ppart_f);

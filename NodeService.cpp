@@ -6,7 +6,7 @@
 #include "NodeService.h"
 #include "Tools.h"
 
-
+#define RELEASE_PING
 using namespace std;
 extern sqlite3* db;
 extern int gloId;
@@ -25,17 +25,14 @@ int main(int argc, char* argv[])
         }
         else if (strcmp(argv[2], "sql") == 0) {
             gloConfig.service = type::sql;
-            gloConfig.server = argv[3];
-            gloConfig.uname = argv[4];
-            gloConfig.pass = argv[5];
             printf("This program is running with Web port %d and accept SQL monitoring\n", gloConfig.port);
         }
     }
     
     if(argc<2) {
-        printf("How to run: NodeService.exe <port web service> <ping|sql> <sql server> <sql uname> <sql password>\n");
+        printf("How to run: NodeService.exe <port web service> <ping|sql>\n");
         printf("Even you didn't set parameter correctly, this program is still running with Web port 8080 and accept Ping monitoring\n");
-
+        gloConfig.service = type::ping;
         //return 1;
     }
     
@@ -66,8 +63,8 @@ int main(int argc, char* argv[])
  //    printf("ERROR: Need argument\n");
  //    return 1;
  //}
-    gloConfig.port = 8080;
+    //gloConfig.port = 8081;
     //gloConfig.service = type::sql;
-    runWebAndServices();
+    //runWebAndServices();
     return 0;
 }
